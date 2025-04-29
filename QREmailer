@@ -1,0 +1,92 @@
+import pandas as pd
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from email.mime.image import MIMEImage
+import os
+
+def send_email_with_qr(recipient_email, recipient_name, qr_code_path, venue_details, sender_email, sender_password):
+    """Sends an email with a QR code image and venue details."""
+    try:
+        msg = MIMEMultipart()
+        msg['From'] = sender_email
+        msg['To'] = recipient_email
+        msg['Subject'] = f"Your Unique Details for the Event"
+
+        body = f"""
+        Dear {recipient_name},
+
+        Thank you for registering in Holy Spirit Conference 2025! Please find your unique QR code attached to this email.
+        Kindly present this QR code at the venue for entry.
+
+        Venue Details:
+        Holy Spirit Generation Church,
+        NCM Arena, Near Legacy School & MotorMind,
+        Byrathi, Kothanur, Bangalore 560077
+
+        We look forward to seeing you there.
+
+        Sincerely,
+        Holy Spirit Generation Church
+        RWO Support Team
+        """
+        msg.attach(MIMEText(body, 'plain'))
+
+        # Attach the QR code image
+        with open(qr_code_path, 'rb') as img_file:
+            img = MIMEImage(img_file.read())
+            img.add_header('Content-Disposition', 'attachment', filename=os.path.basename(qr_code_path))
+            msg.attach(img)
+
+        # Connect to the SMTP server
+        with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
+            server.login(sender_email, sender_password)
+            server.sendmail(sender_email, recipient_email, msg.as_string())
+        print(f"Email sent successfully to {recipient_email}")
+
+    except Exception as e:
+        print(f"Error sending email to {recipient_email}: {e}")
+
+def process_excel_and_send_emails(excel_file_path, sender_email, sender_password):
+    """Reads data from an Excel sheet and sends personalized emails."""
+    try:
+        df = pd.read_excel(excel_file_path)
+
+        # Ensure the Excel sheet has the required columns
+        if 'Name' not in df.columns or 'Email' not in df.columns or 'QRCodePath' not in df.columns or 'VenueDetails' not in df.columns:
+            print("Error: The Excel sheet must contain columns named 'Name', 'Email', 'QRCodePath', and 'VenueDetails'.")
+            return
+
+        for index, row in df.iterrows():
+            name = row['Name']
+            email = row['Email']
+            qr_code_path = row['QRCodePath']
+            venue_details = row['VenueDetails']
+
+            # Check if the QR code image file exists
+            if not os.path.exists(qr_code_path):
+                print(f"Warning: QR code image not found at {qr_code_path} for {name}. Skipping email.")
+                continue
+
+            send_email_with_qr(email, name, qr_code_path, venue_details, sender_email, sender_password)
+
+        print("Finished processing the Excel sheet and sending emails.")
+
+    except FileNotFoundError:
+        print(f"Error: Excel file not found at {excel_file_path}")
+    except Exception as e:
+        print(f"An error occurred while processing the Excel sheet: {e}")
+
+if __name__ == "__main__":
+    # --- Configuration ---
+    excel_file = 'unique_individuals.xlsx'  # Replace with the actual path to your Excel file
+    sender_email_address = 'your_email@gmail.com'  # Replace with your Gmail address
+    sender_email_password = 'your_password'      # Replace with your Gmail password (consider using App Password for security)
+
+    # --- Ensure the Excel file has the following columns: ---
+    # Name (str): The name of the individual.
+    # Email (str): The recipient's email address.
+    # QRCodePath (str): The full path to the QR code image file for this individual.
+    # VenueDetails (str): The venue details to be included in the email.
+
+    process_excel_and_send_emails(excel_file, sender_email_address, sender_email_password)
