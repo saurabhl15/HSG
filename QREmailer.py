@@ -91,6 +91,7 @@ def process_excel_and_send_emails(excel_file_path, retry_errors_only=False, batc
 
         required_columns = {'ID', 'Name', 'email', 'Aggregate'}
         if not required_columns.issubset(df.columns):
+            print(df.columns)
             print(f"Error: The Excel sheet must contain columns: {required_columns}")
             return
 
@@ -135,8 +136,8 @@ def process_excel_and_send_emails(excel_file_path, retry_errors_only=False, batc
             # Batch control
             batch_count += 1
             if batch_count % batch_size == 0:
-                print(f"\nBatch limit reached ({batch_size}). Pausing for 30 seconds...\n")
-                time.sleep(30)
+                print(f"\nBatch limit reached ({batch_size}). Pausing for 2 minutes...\n")
+                time.sleep(120)
 
     except FileNotFoundError:
         print(f"Error: Excel file not found at {excel_file_path}")
@@ -160,12 +161,13 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Send QR Code Emails for Event")
     parser.add_argument('--datasheet', required=True, help='Path to Excel file')
     parser.add_argument('--retry-errors', action='store_true', help='Only retry emails that previously failed')
-    parser.add_argument('--batch-size', type=int, default=10, help='Number of emails to send per batch')
+    parser.add_argument('--batch-size', type=int, default=100, help='Number of emails to send per batch')
 
 
     args = parser.parse_args()
 
     process_excel_and_send_emails(
         args.datasheet,
-        retry_errors_only=args.retry_errors
+        retry_errors_only=args.retry_errors,
+        batch_size=args.batch_size
     )
