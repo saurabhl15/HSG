@@ -84,7 +84,7 @@ This project aims to build a cloud-based real-time audio translation solution fo
 
 -
 
-### Phase 2: Real-Time Audio Streaming (Week )
+### Phase 2: Real-Time Audio Streaming, Infra (Week )
 
 -
 
