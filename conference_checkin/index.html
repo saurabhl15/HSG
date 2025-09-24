@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title><?= conferenceName ?> • <?= churchName ?></title>
+  <style>
+    :root{
+      --bg:#f8fafc; --card:#ffffff; --ink:#0f172a; --muted:#64748b;
+      --accent:#111827; --border:#e5e7eb;
+      --ok-bg:#ecfdf5; --ok-bd:#a7f3d0; --bad-bg:#fef2f2; --bad-bd:#fecaca;
+      --tab:#f1f5f9; --tab-active:#111827; --tab-ink:#0f172a; --tab-active-ink:#ffffff;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;background:var(--bg);color:var(--ink);}
+    .shell{max-width:980px;margin:0 auto;padding:16px;}
+    .hero{position:sticky;top:0;z-index:3;background:linear-gradient(135deg,#eef2ff,#e0f2fe);border-bottom:1px solid var(--border);}
+    .hero-inner{max-width:980px;margin:0 auto;padding:14px 16px;display:flex;gap:12px;align-items:center;}
+    .brand{font-weight:800;font-size:18px;letter-spacing:.2px}
+    .status-pill{margin-left:auto;font-size:13px;padding:8px 10px;border-radius:999px;border:1px solid var(--border);
+      background:#fff;display:flex;align-items:center;gap:8px;white-space:nowrap;}
+    .status-pill .dot{width:10px;height:10px;border-radius:50%;}
+    .dot.inactive{background:#ef4444}.dot.active{background:#10b981}
+    .tabs{display:flex;gap:8px;padding:12px 16px 8px;border-bottom:1px solid var(--border);}
+    .tab{padding:8px 12px;border-radius:8px;background:var(--tab);color:var(--tab-ink);cursor:pointer;user-select:none}
+    .tab.active{background:var(--tab-active);color:var(--tab-active-ink);}
+    .wrap{padding:12px 16px;}
+    .card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;margin-top:12px;box-shadow:0 1px 2px rgba(0,0,0,.03)}
+    .row{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end}
+    .field{display:flex;flex-direction:column;gap:6px;min-width:180px}
+    label{font-size:12px;color:var(--muted);letter-spacing:.2px}
+    input,select,button{padding:10px 12px;font-size:14px;border:1px solid var(--border);border-radius:10px;background:#fff}
+    input::placeholder{color:#9aa4b2}
+    button{cursor:pointer}
+    .btn{background:#fff}
+    .btn.primary{background:var(--accent);color:#fff;border-color:transparent}
+    .btn.ghost{background:transparent}
+    .btn.checked{background:#10b981;color:#fff;border-color:#10b981}
+    .btn.food-paid{background:#10b981;color:#fff;border-color:#10b981}
+    .stack{display:flex;gap:8px;align-items:center}
+    .status{padding:10px;border-radius:10px;margin-top:8px}
+    .status.ok{background:var(--ok-bg);border:1px solid var(--ok-bd)}
+    .status.bad{background:var(--bad-bg);border:1px solid var(--bad-bd)}
+    .kpi{font-weight:800;font-size:20px}
+    .section-title{margin:0 0 8px 0;font-size:16px}
+    .hint{font-size:12px;color:var(--muted)}
+    .hidden{display:none !important}
+    .table{width:100%;border-collapse:separate;border-spacing:0 6px;margin-top:8px}
+    .tr{display:grid;grid-template-columns:1.2fr .9fr .9fr .8fr auto;gap:8px;align-items:center;background:#fff;border:1px solid var(--border);padding:8px;border-radius:8px}
+    .small{font-size:12px;color:var(--muted)}
+    .pill{padding:2px 8px;border-radius:999px;border:1px solid var(--border);font-size:12px}
+    .required{color:#ef4444}
+  </style>
+</head>
+<body>
+  <div class="hero">
+    <div class="hero-inner">
+      <div class="brand"><?= conferenceName ?> • <?= churchName ?></div>
+      <div id="statusPill" class="status-pill">
+        <span id="statusDot" class="dot inactive"></span>
+        <span id="statusText">Session: Inactive</span>
+      </div>
+    </div>
+    <div class="tabs">
+      <div class="tab" id="tab-checkin">Check-in</div>
+      <div class="tab" id="tab-spot">Admin</div>
+      <div class="tab" id="tab-stats">Stats</div>
+    </div>
+  </div>
+
+  <div class="shell wrap">
+    <!-- Session controls -->
+    <div class="card">
+      <div class="row" style="align-items:flex-end;">
+        <div class="field" style="flex:1 1 260px">
+          <label>Session Name</label>
+          <input id="sessionName" placeholder="e.g. D1-Morning" />
+        </div>
+        <div class="stack" style="align-items:flex-end;">
+          <button class="btn primary" id="btnStart" onclick="startSessionUI()" title="Starting adds a new column; restarting an existing one won't create a new column" style="height:42px;">Start Session</button>
+          <button class="btn" id="btnEnd" onclick="endSessionUI()" title="Stop using this session for check-ins" style="display:none;height:42px;">End Session</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Check-in -->
+    <div id="checkin-panel" class="card" style="display:none;">
+      <h3 class="section-title">Check-in</h3>
+      <div class="field" style="width:100%;">
+        <label>Scan QR / paste code</label>
+        <input id="scanInput" autocomplete="off" placeholder="Focus here and scan…" title="Place cursor here and scan the attendee code" />
+      </div>
+      <div id="result" class="card hidden"></div>
+      
+      <!-- Lookup section for not found cases -->
+      <div id="checkin-lookup" class="card hidden" style="margin-top:12px;">
+        <h4 style="margin:0 0 6px 0">Lookup Attendee</h4>
+        <div class="row">
+          <div class="field" style="flex:1 1 260px">
+            <label>Name / Phone / Email / QR Code</label>
+            <input id="checkin_lk_q" placeholder="Type part of name, phone, email, or scan QR">
+          </div>
+          <button class="btn" onclick="checkinLookup()" title="Find existing records">Search</button>
+        </div>
+        <div id="checkin_lk_results" class="table"></div>
+      </div>
+    </div>
+
+    <!-- Admin -->
+    <div id="spot-panel" class="card" style="display:none;">
+      <h3 class="section-title">Spot Registration</h3>
+      <div class="row">
+        <div class="field"><label>Name <span class="required">*</span></label><input id="sr_name" placeholder="Full name" required></div>
+        <div class="field" style="max-width:160px"><label>Gender</label><input id="sr_gender" placeholder="Male / Female"></div>
+        <div class="field" style="max-width:120px"><label>Age</label><input id="sr_age" placeholder="Years"></div>
+        <div class="field"><label>Phone</label><input id="sr_phone" placeholder="+91…"></div>
+        <div class="field"><label>Email</label><input id="sr_email" placeholder="name@example.com"></div>
+        <div class="field"><label>Type of Member</label><input id="sr_type" placeholder="Member / Visitor…"></div>
+        <div class="field"><label>City</label><input id="sr_city" placeholder="City"></div>
+        <div class="field"><label>State</label><input id="sr_state" placeholder="State"></div>
+        <div class="field"><label>Country</label><input id="sr_country" placeholder="Country"></div>
+      </div>
+      <div class="hint">ID and Aggregate will auto-fill via formulas copied from the previous row. Name is required.</div>
+      <div class="stack" style="margin-top:8px">
+        <button class="btn primary" onclick="submitSpotReg(true)" title="Register the person and mark them checked in to this session">Register and Check In</button>
+        <button class="btn" onclick="submitSpotReg(false)" title="Register only; do not check in yet">Register Only</button>
+        <button class="btn ghost" onclick="clearSpotForm()" title="Clear all form fields">Clear Form</button>
+      </div>
+      <div id="spot-result" class="status ok hidden"></div>
+
+      <hr style="border:none;border-top:1px solid var(--border);margin:16px 0">
+      <h4 style="margin:0 0 6px 0">Lookup</h4>
+      <div class="row">
+        <div class="field" style="flex:1 1 260px">
+          <label>Name / Phone / Email</label>
+          <input id="lk_q" placeholder="Type part of name, phone, or email">
+        </div>
+        <button class="btn" onclick="lookup()" title="Find existing records">Search</button>
+      </div>
+      <div id="lk_results" class="table"></div>
+    </div>
+
+    <!-- Stats -->
+    <div id="stats-panel" class="card" style="display:none;">
+      <h3 class="section-title">Stats</h3>
+      <div class="stack">
+        <button class="btn" onclick="refreshStats()" title="Fetch latest counts">Refresh</button>
+      </div>
+      <div id="stats" class="row" style="margin-top:10px;"></div>
+    </div>
+  </div>
+
+<script>
+  // Tabs
+  const tabs = ['checkin','spot','stats'];
+  document.getElementById('tab-checkin').onclick=()=>showTab('checkin');
+  document.getElementById('tab-spot').onclick=()=>showTab('spot');
+  document.getElementById('tab-stats').onclick=()=>showTab('stats');
+
+  function showTab(which){
+    tabs.forEach(t=>{
+      const active = (t===which);
+      document.getElementById('tab-'+t).classList.toggle('active',active);
+      const shouldShow = t==='checkin' ? (active && isSessionActive()) : active;
+      document.getElementById(t+'-panel').style.display = shouldShow ? '' : 'none';
+    });
+    
+    // Auto-refresh stats when switching to stats tab
+    if (which === 'stats' && isSessionActive()) {
+      refreshStats();
+    }
+  }
+
+  // Session state
+  function isSessionActive(){return localStorage.getItem('sessionActive')==='1';}
+  function setSessionActive(a){
+    localStorage.setItem('sessionActive',a?'1':'0');
+    document.getElementById('btnStart').style.display = a ? 'none' : '';
+    document.getElementById('btnEnd').style.display   = a ? '' : 'none';
+    document.getElementById('checkin-panel').style.display = a && document.getElementById('tab-checkin').classList.contains('active') ? '' : (a ? '' : 'none');
+    const sName=(document.getElementById('sessionName').value||'').trim();
+    document.getElementById('statusDot').className='dot '+(a?'active':'inactive');
+    document.getElementById('statusText').textContent = a ? `Session: Active — ${sName}` : 'Session: Inactive';
+  }
+
+  function startSessionUI(){
+    const s=(document.getElementById('sessionName').value||'').trim();
+    if(!s){alert('Enter session name');return;}
+    google.script.run
+      .withSuccessHandler(resp=>{
+        if(resp.status==='EXISTS'){
+          if(!confirm(`Session "${s}" exists. Restart?`)) return;
+          setSessionActive(true); showTab('checkin');
+        } else if(resp.status==='CREATED'){
+          setSessionActive(true); showTab('checkin');
+        } else { alert(resp.message||'Error'); }
+      })
+      .withFailureHandler(err=>alert(err))
+      .startSession(s);
+  }
+  function endSessionUI(){ setSessionActive(false); showTab('spot'); }
+
+  // Check-in flow
+  const scanEl = document.getElementById('scanInput');
+  scanEl.addEventListener('keydown',e=>{ if(e.key==='Enter') handleScan(); });
+  
+  // Add Enter key support for lookup inputs
+  document.getElementById('checkin_lk_q').addEventListener('keydown',e=>{ if(e.key==='Enter') checkinLookup(); });
+  document.getElementById('lk_q').addEventListener('keydown',e=>{ if(e.key==='Enter') lookup(); });
+  function handleScan(){
+    const text=(scanEl.value||'').trim();
+    if(!text){ return; }
+    
+    // Hide lookup section
+    document.getElementById('checkin-lookup').classList.add('hidden');
+    
+    // Show loading state
+    const el=document.getElementById('result');
+    el.classList.remove('hidden');
+    el.innerHTML=`<div class="status">Checking in...</div>`;
+    
+    // Auto-checkin flow
+    const s=(document.getElementById('sessionName').value||'').trim();
+    if(!s){ 
+      el.innerHTML=`<div class="status bad">Set session name first</div>`; 
+      return; 
+    }
+    
+    google.script.run
+      .withSuccessHandler(handleCheckinResult)
+      .withFailureHandler(err=>{
+        el.innerHTML=`<div class="status bad">Error: ${err}</div>`;
+      })
+      .checkInByAggregate(text, s);
+  }
+  
+  function handleCheckinResult(resp){
+    const el=document.getElementById('result');
+    if(resp.status==='NOT_FOUND'){ 
+      el.innerHTML=`<div class="status bad">QR not found. Try lookup below.</div>`; 
+      document.getElementById('checkin-lookup').classList.remove('hidden');
+      return; 
+    }
+    if(resp.status!=='CHECKED_IN'){ 
+      el.innerHTML=`<div class="status bad">Error: ${resp.message||resp.status}</div>`; 
+      return; 
+    }
+    
+    // Success - show simple confirmation
+    el.innerHTML=`<div class="status ok">✓ Checked in: ${resp.attendee.Name}</div>`;
+    scanEl.value=''; 
+    scanEl.focus();
+  }
+  function togglePayment(row){
+    google.script.run.withSuccessHandler(()=>handleScan()).withFailureHandler(err=>alert(err)).togglePaidForFood(row,null);
+  }
+  function markOptForFood(row){
+    google.script.run.withSuccessHandler(()=>handleScan()).withFailureHandler(err=>alert(err)).togglePaidForFood(row,true);
+  }
+  function checkInNow(agg){
+    const s=(document.getElementById('sessionName').value||'').trim();
+    if(!s){ alert('Set session name first'); return; }
+    google.script.run.withSuccessHandler(r=>{
+      document.getElementById('result').innerHTML=`<div class="status ok">✓ Checked in: ${r.attendee.Name}</div>`;
+      scanEl.value=''; scanEl.focus();
+    }).withFailureHandler(err=>alert(err)).checkInByAggregate(agg,s);
+  }
+  
+  // Check-in lookup function
+  function checkinLookup(){
+    const q=(document.getElementById('checkin_lk_q').value||'').trim();
+    if(!q){ document.getElementById('checkin_lk_results').innerHTML=''; return; }
+    const s=(document.getElementById('sessionName').value||'').trim();
+    
+    // Show loading state in the main result area
+    const el=document.getElementById('result');
+    el.classList.remove('hidden');
+    el.innerHTML=`<div class="status">Looking up attendee...</div>`;
+    
+    // First try QR code lookup if it looks like a QR code (contains VOA)
+    if(q.includes('VOA')) {
+      google.script.run.withSuccessHandler(resp=>{
+        if(resp.status==='FOUND') {
+          // Found via QR, auto check-in
+          handleCheckinResult({status: 'CHECKED_IN', attendee: resp.attendee});
+          document.getElementById('checkin-lookup').classList.add('hidden');
+          document.getElementById('checkin_lk_q').value = '';
+          return;
+        }
+        // QR not found, fall back to regular search
+        performCheckinSearch(q, s);
+      }).withFailureHandler(err=>{
+        // Error with QR lookup, fall back to regular search
+        performCheckinSearch(q, s);
+      }).lookupByAggregate(q);
+    } else {
+      // Regular search
+      performCheckinSearch(q, s);
+    }
+  }
+  
+  function performCheckinSearch(q, s) {
+    google.script.run.withSuccessHandler(res=>{
+      const cont=document.getElementById('checkin_lk_results');
+      if(!res || !res.items || res.items.length===0){ 
+        cont.innerHTML='<div class="small">No matches.</div>'; 
+        // Hide the loading state in result area
+        document.getElementById('result').classList.add('hidden');
+        return; 
+      }
+      cont.innerHTML='';
+      res.items.forEach(it=>{
+        const row=document.createElement('div');
+        row.className='tr';
+        const isCheckedIn = s && (it[s]||'').toString().toLowerCase()==='yes';
+        row.innerHTML=`
+          <div><b>${it.Name||'-'}</b><div class="small">${it['Type of Member']||''}</div></div>
+          <div>${it.Phone||'-'}</div>
+          <div>${it.Email||'-'}</div>
+          <div>${it.City||'-'}</div>
+          <div class="stack">
+            <button class="btn ${isCheckedIn ? 'checked' : 'primary'}" onclick="quickCheckIn('${it.Aggregate}')" title="Mark checked in for this session">
+              ${isCheckedIn ? '✓ Checked In' : 'Check In'}
+            </button>
+          </div>
+        `;
+        cont.appendChild(row);
+      });
+      // Hide the loading state in result area
+      document.getElementById('result').classList.add('hidden');
+    }).withFailureHandler(err=>{
+      alert(err);
+      // Hide the loading state in result area on error
+      document.getElementById('result').classList.add('hidden');
+    }).searchAttendees(q, s);
+  }
+
+  // Admin: Spot Registration (+ optional check-in)
+  function submitSpotReg(checkInNowFlag){
+    const s=(document.getElementById('sessionName').value||'').trim();
+    const att={
+      'Name':sr_name.value,'Gender':sr_gender.value,'Age':sr_age.value,'Phone':sr_phone.value,
+      'Email':sr_email.value,'Type of Member':sr_type.value,'City':sr_city.value,
+      'State':sr_state.value,'Country':sr_country.value
+    };
+    
+    // Validate required fields
+    if (!att.Name || !att.Name.trim()) {
+      alert('Please enter a name');
+      return;
+    }
+    
+    // Show loading state
+    const box = document.getElementById('spot-result');
+    box.classList.remove('hidden');
+    box.innerHTML = '<div class="status">Processing registration...</div>';
+    
+    // Set a timeout to show error if no response
+    const timeout = setTimeout(() => {
+      box.innerHTML = '<div class="status bad">Registration timed out. Please try again.</div>';
+    }, 10000);
+    
+    google.script.run
+      .withSuccessHandler(r=>{
+        clearTimeout(timeout);
+        console.log('Spot registration success:', r);
+        
+        if (!box) {
+          console.error('spot-result element not found');
+          return;
+        }
+        
+        box.classList.remove('hidden');
+        
+        // Build status message
+        let statusMessage = checkInNowFlag ? 'Registered & checked in: ' : 'Registered: ';
+        statusMessage += (r.attendee && r.attendee.Name) ? r.attendee.Name : 'Unknown';
+        
+        box.innerHTML=`<div class="status ok">${statusMessage}</div>`;
+        
+        // Clear form fields
+        ['sr_name','sr_gender','sr_age','sr_phone','sr_email','sr_type','sr_city','sr_state','sr_country'].forEach(id=>{ 
+          const el=document.getElementById(id); 
+          if(el) el.value=''; 
+        });
+        
+        // Focus back to name field for next entry
+        document.getElementById('sr_name').focus();
+      })
+      .withFailureHandler(err=>{
+        clearTimeout(timeout);
+        console.error('Spot registration error:', err);
+        box.innerHTML = '<div class="status bad">Error: ' + err + '</div>';
+      })
+      .spotRegister(att, checkInNowFlag ? s : '');
+  }
+
+  // Clear spot registration form
+  function clearSpotForm() {
+    ['sr_name','sr_gender','sr_age','sr_phone','sr_email','sr_type','sr_city','sr_state','sr_country'].forEach(id=>{ 
+      const el=document.getElementById(id); 
+      if(el) el.value=''; 
+    });
+    document.getElementById('spot-result').classList.add('hidden');
+    document.getElementById('sr_name').focus();
+  }
+
+
+  // Admin: Lookup + quick check-in
+  function lookup(){
+    const q=(document.getElementById('lk_q').value||'').trim();
+    if(!q){ document.getElementById('lk_results').innerHTML=''; return; }
+    const s=(document.getElementById('sessionName').value||'').trim();
+    
+    // First try QR code lookup if it looks like a QR code (contains VOA)
+    if(q.includes('VOA')) {
+      google.script.run.withSuccessHandler(resp=>{
+        if(resp.status==='FOUND') {
+          // Found via QR, show in results with check-in status
+          showLookupResults([resp.attendee], s);
+          return;
+        }
+        // QR not found, fall back to regular search
+        performAdminSearch(q, s);
+      }).withFailureHandler(err=>{
+        // Error with QR lookup, fall back to regular search
+        performAdminSearch(q, s);
+      }).lookupByAggregate(q);
+    } else {
+      // Regular search
+      performAdminSearch(q, s);
+    }
+  }
+  
+  function performAdminSearch(q, s) {
+    google.script.run.withSuccessHandler(res=>{
+      const cont=document.getElementById('lk_results');
+      if(!res || !res.items || res.items.length===0){ cont.innerHTML='<div class="small">No matches.</div>'; return; }
+      showLookupResults(res.items, s);
+    }).withFailureHandler(err=>alert(err)).searchAttendees(q, s);
+  }
+  
+  function showLookupResults(items, sessionName) {
+    const cont=document.getElementById('lk_results');
+    cont.innerHTML='';
+    items.forEach(it=>{
+      const row=document.createElement('div');
+      row.className='tr';
+      const paidForFood = (it['Paid for Food']||'').toString().toLowerCase()==='yes';
+      const isCheckedIn = sessionName && (it[sessionName]||'').toString().toLowerCase()==='yes';
+      row.innerHTML=`
+        <div><b>${it.Name||'-'}</b><div class="small">${it['Type of Member']||''}</div></div>
+        <div>${it.Phone||'-'}</div>
+        <div>${it.Email||'-'}</div>
+        <div>${it.City||'-'}</div>
+        <div class="stack">
+          <button class="btn ${paidForFood ? 'food-paid' : ''}" onclick="toggleFoodPayment(${it._row})" title="Toggle food payment status">
+            Food ${paidForFood ? '✓' : '○'}
+          </button>
+          <button class="btn ${isCheckedIn ? 'checked' : ''}" onclick="quickCheckIn('${it.Aggregate}')" title="Mark checked in for this session">
+            ${isCheckedIn ? '✓ Checked In' : 'Check In'}
+          </button>
+        </div>
+      `;
+      cont.appendChild(row);
+    });
+  }
+  function fillSpotFromLookup(row){
+    google.script.run.withSuccessHandler(r=>{
+      const a=r.attendee;
+      sr_name.value=a.Name||''; sr_gender.value=a.Gender||''; sr_age.value=a.Age||'';
+      sr_phone.value=a.Phone||''; sr_email.value=a.Email||''; sr_type.value=a['Type of Member']||''; 
+      sr_city.value=a.City||''; sr_state.value=a.State||''; sr_country.value=a.Country||'';
+    }).withFailureHandler(err=>alert(err)).getByRow(row);
+  }
+  function quickCheckIn(agg){
+    const s=(document.getElementById('sessionName').value||'').trim();
+    if(!s){ alert('Set session name first'); return; }
+    
+    // Check if we're in the check-in tab or admin tab
+    const isCheckinTab = document.getElementById('tab-checkin').classList.contains('active');
+    
+    if (isCheckinTab) {
+      // Show loading state in the main result area for check-in tab
+      const el=document.getElementById('result');
+      el.classList.remove('hidden');
+      el.innerHTML=`<div class="status">Checking in...</div>`;
+      
+      google.script.run.withSuccessHandler(r=>{
+        // Show success message in the main result area
+        el.innerHTML=`<div class="status ok">✓ Checked in: ${r.attendee && r.attendee.Name ? r.attendee.Name : 'Unknown'}</div>`;
+        // Clear the lookup input and hide lookup section
+        document.getElementById('checkin_lk_q').value = '';
+        document.getElementById('checkin-lookup').classList.add('hidden');
+        // Focus back to scan input
+        document.getElementById('scanInput').focus();
+      }).withFailureHandler(err=>{
+        el.innerHTML=`<div class="status bad">Error: ${err}</div>`;
+      }).checkInByAggregate(agg,s);
+    } else {
+      // For admin tab, show a simple alert and refresh the lookup
+      google.script.run.withSuccessHandler(r=>{
+        alert('Checked in: '+(r.attendee && r.attendee.Name ? r.attendee.Name : ''));
+        // Refresh the lookup results
+        lookup();
+      }).withFailureHandler(err=>alert(err)).checkInByAggregate(agg,s);
+    }
+  }
+  
+  function toggleFoodPayment(row){
+    google.script.run.withSuccessHandler(()=>lookup()).withFailureHandler(err=>alert(err)).togglePaidForFood(row,null);
+  }
+
+  // Stats refresh function
+  function refreshStats(){
+    const s=(document.getElementById("sessionName").value||"").trim();
+    if(!s){ 
+      document.getElementById("stats").innerHTML="<div class=\"status bad\">Set session name first</div>";
+      return; 
+    }
+    
+    // Show loading state
+    document.getElementById("stats").innerHTML="<div class=\"status\">Loading stats...</div>";
+    
+    google.script.run
+      .withSuccessHandler(res=>{
+        const cont=document.getElementById("stats");
+        if(res.status==="ERROR"){
+          cont.innerHTML=`<div class="status bad">${res.message}</div>`;
+          return;
+        }
+        cont.innerHTML=`
+          <div class="field">
+            <div class="kpi">${res.totalCheckedIn}</div>
+            <div class="small">Total Checked In</div>
+          </div>
+          <div class="field">
+            <div class="kpi">${res.withFoodAmongCheckedIn}</div>
+            <div class="small">With Food</div>
+          </div>
+          <div class="field">
+            <div class="kpi">${res.bangalore || 0}</div>
+            <div class="small">Bangalore</div>
+          </div>
+          <div class="field">
+            <div class="kpi">${res.outstation || 0}</div>
+            <div class="small">Outstation</div>
+          </div>
+        `;
+      })
+      .withFailureHandler(err=>{
+        document.getElementById("stats").innerHTML=`<div class="status bad">Error: ${err}</div>`;
+      })
+      .getSessionStats(s);
+  }
+  // Keyboard shortcuts
+  document.addEventListener('keydown', function(e) {
+    // Ctrl+Enter or Cmd+Enter for Register and Check In
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+      e.preventDefault();
+      if (document.getElementById('tab-spot').classList.contains('active')) {
+        submitSpotReg(true);
+      }
+    }
+    // Escape to clear form
+    if (e.key === 'Escape') {
+      if (document.getElementById('tab-spot').classList.contains('active')) {
+        clearSpotForm();
+      }
+    }
+  });
+
+  // Init
+  showTab('checkin');
+  setSessionActive(false);
+  
+  // Auto-refresh stats on page load if session is active
+  if (isSessionActive()) {
+    setTimeout(() => {
+      if (document.getElementById('tab-stats').classList.contains('active')) {
+        refreshStats();
+      }
+    }, 500);
+  }
+</script>
+</body>
+</html>
