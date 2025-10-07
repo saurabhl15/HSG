@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title><?= conferenceName ?> • <?= churchName ?> • Food Lookup</title>
+  <style>
+    :root{
+      --bg:#f8fafc; --card:#ffffff; --ink:#0f172a; --muted:#64748b;
+      --accent:#111827; --border:#e5e7eb;
+      --ok-bg:#ecfdf5; --ok-bd:#a7f3d0; --bad-bg:#fef2f2; --bad-bd:#fecaca;
+      --food-yes:#10b981; --food-no:#ef4444;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;background:var(--bg);color:var(--ink);}
+    .shell{max-width:980px;margin:0 auto;padding:16px;}
+    .hero{position:sticky;top:0;z-index:3;background:linear-gradient(135deg,#eef2ff,#e0f2fe);border-bottom:1px solid var(--border);}
+    .hero-inner{max-width:980px;margin:0 auto;padding:14px 16px;display:flex;gap:12px;align-items:center;}
+    .brand{font-weight:800;font-size:18px;letter-spacing:.2px}
+    .status-pill{margin-left:auto;font-size:13px;padding:8px 10px;border-radius:999px;border:1px solid var(--border);
+      background:#fff;display:flex;align-items:center;gap:8px;white-space:nowrap;}
+    .status-pill .dot{width:10px;height:10px;border-radius:50%;}
+    .dot.inactive{background:#ef4444}.dot.active{background:#10b981}
+    .wrap{padding:12px 16px;}
+    .card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;margin-top:12px;box-shadow:0 1px 2px rgba(0,0,0,.03)}
+    .row{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end}
+    .field{display:flex;flex-direction:column;gap:6px;min-width:180px}
+    label{font-size:12px;color:var(--muted);letter-spacing:.2px}
+    input,button{padding:10px 12px;font-size:14px;border:1px solid var(--border);border-radius:10px;background:#fff}
+    input::placeholder{color:#9aa4b2}
+    button{cursor:pointer}
+    .btn{background:#fff;border:1px solid var(--border)}
+    .btn.primary{background:var(--accent);color:#fff;border-color:transparent}
+    .btn.ghost{background:transparent}
+    .stack{display:flex;gap:8px;align-items:center}
+    .status{padding:10px;border-radius:10px;margin-top:8px}
+    .status.ok{background:var(--ok-bg);border:1px solid var(--ok-bd)}
+    .status.bad{background:var(--bad-bg);border:1px solid var(--bad-bd)}
+    .food-status{font-size:24px;font-weight:800;padding:16px;border-radius:12px;text-align:center;margin:12px 0}
+    .food-yes{background:var(--ok-bg);color:var(--food-yes);border:2px solid var(--ok-bd)}
+    .food-no{background:var(--bad-bg);color:var(--food-no);border:2px solid var(--bad-bd)}
+    .hint{font-size:12px;color:var(--muted)}
+    .hidden{display:none !important}
+    .table{width:100%;border-collapse:separate;border-spacing:0 6px;margin-top:8px}
+    .tr{display:grid;grid-template-columns:1.2fr .9fr .9fr .8fr auto;gap:8px;align-items:center;background:#fff;border:1px solid var(--border);padding:8px;border-radius:8px}
+    .small{font-size:12px;color:var(--muted)}
+    .pill{padding:2px 8px;border-radius:999px;border:1px solid var(--border);font-size:12px}
+    .food-pill{font-weight:600;padding:4px 12px;border-radius:6px}
+    .food-pill.yes{background:var(--ok-bg);color:var(--food-yes);border:1px solid var(--ok-bd)}
+    .food-pill.no{background:var(--bad-bg);color:var(--food-no);border:1px solid var(--bad-bd)}
+    
+    /* Animation styles */
+    .scanning{animation:scanning 0.6s ease-in-out;}
+    .scan-success{animation:scanSuccess 0.8s ease-in-out;}
+    .scan-error{animation:scanError 0.6s ease-in-out;}
+    .pulse{animation:pulse 0.3s ease-in-out;}
+    
+    @keyframes scanning{
+      0%{transform:scale(1);opacity:1}
+      50%{transform:scale(1.02);opacity:0.8;background:linear-gradient(135deg,#e0f2fe,#eef2ff)}
+      100%{transform:scale(1);opacity:1}
+    }
+    
+    @keyframes scanSuccess{
+      0%{transform:scale(1);opacity:1}
+      25%{transform:scale(1.05);opacity:0.9;background:var(--ok-bg)}
+      50%{transform:scale(1.02);opacity:1;background:var(--ok-bg)}
+      75%{transform:scale(1.01);opacity:1;background:var(--ok-bg)}
+      100%{transform:scale(1);opacity:1}
+    }
+    
+    @keyframes scanError{
+      0%{transform:scale(1);opacity:1}
+      25%{transform:scale(1.05);opacity:0.9;background:var(--bad-bg)}
+      50%{transform:scale(1.02);opacity:1;background:var(--bad-bg)}
+      75%{transform:scale(1.01);opacity:1;background:var(--bad-bg)}
+      100%{transform:scale(1);opacity:1}
+    }
+    
+    @keyframes pulse{
+      0%{transform:scale(1)}
+      50%{transform:scale(1.05)}
+      100%{transform:scale(1)}
+    }
+    
+    .scan-indicator{
+      position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+      width:20px;height:20px;border:2px solid #3b82f6;border-radius:50%;
+      border-top-color:transparent;animation:spin 1s linear infinite;
+      display:none;
+    }
+    
+    @keyframes spin{
+      to{transform:translate(-50%,-50%) rotate(360deg)}
+    }
+  </style>
+</head>
+<body>
+  <div class="hero">
+    <div class="hero-inner">
+      <div class="brand"><?= conferenceName ?> • <?= churchName ?></div>
+      <div id="statusPill" class="status-pill">
+        <span id="statusDot" class="dot active"></span>
+        <span id="statusText">Food Lookup: Ready</span>
+        <button id="refreshCacheBtn" class="btn ghost" onclick="refreshCache()" style="margin-left:8px;padding:4px 8px;font-size:11px" title="Refresh data from sheet">Refresh</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="shell wrap">
+    <!-- Main Lookup Card -->
+    <div class="card">
+      <h3 style="margin:0 0 12px 0;font-size:18px">Food Status Lookup</h3>
+      
+      <!-- QR Scan Input -->
+      <div class="field" style="width:100%;position:relative;">
+        <label>Scan QR Code or paste code</label>
+        <input id="scanInput" autocomplete="off" placeholder="Focus here and scan QR code..." title="Place cursor here and scan the attendee QR code" />
+        <div id="scanIndicator" class="scan-indicator"></div>
+      </div>
+      
+      <!-- Search Input -->
+      <div class="field" style="width:100%;margin-top:12px;">
+        <label>Search by Name / Phone / Email</label>
+        <input id="searchInput" autocomplete="off" placeholder="Type name, phone, or email..." title="Search for attendee by name, phone, or email" />
+      </div>
+      
+      <!-- Result Display -->
+      <div id="result" class="hidden"></div>
+      
+      <!-- Search Results -->
+      <div id="searchResults" class="hidden" style="margin-top:12px;">
+        <h4 style="margin:0 0 8px 0;font-size:14px">Search Results</h4>
+        <div id="searchResultsList" class="table"></div>
+      </div>
+    </div>
+  </div>
+
+<script>
+  // Global data storage
+  let allData = [];
+  let aggregateIndex = {};
+  
+  // Input elements
+  const scanInput = document.getElementById('scanInput');
+  const searchInput = document.getElementById('searchInput');
+  const resultDiv = document.getElementById('result');
+  const searchResultsDiv = document.getElementById('searchResults');
+  const searchResultsList = document.getElementById('searchResultsList');
+  const scanIndicator = document.getElementById('scanIndicator');
+
+  // Event listeners
+  scanInput.addEventListener('keydown', e => { 
+    if(e.key === 'Enter') handleScan(); 
+  });
+  
+  searchInput.addEventListener('keydown', e => { 
+    if(e.key === 'Enter') handleSearch(); 
+  });
+
+  // Handle QR scan - now completely client-side
+  function handleScan() {
+    const text = (scanInput.value || '').trim();
+    if (!text) return;
+    
+    // Show scanning animation
+    showScanningAnimation();
+    
+    // Small delay to show animation
+    setTimeout(() => {
+      const needle = text.toLowerCase();
+      const found = aggregateIndex[needle];
+      
+      if (!found) {
+        showScanError('QR code not found. Try searching by name/phone/email below.');
+        return;
+      }
+      
+      showScanSuccess(found, found.hasFood);
+      scanInput.value = '';
+      scanInput.focus();
+    }, 200);
+  }
+
+  // Handle search - now completely client-side
+  function handleSearch() {
+    const query = (searchInput.value || '').trim();
+    if (!query) {
+      hideSearchResults();
+      return;
+    }
+    
+    const q = query.toLowerCase();
+    const results = allData.filter(record => {
+      const searchText = [
+        record.name || '',
+        record.phone || '',
+        record.email || ''
+      ].join(' ').toLowerCase();
+      
+      return searchText.includes(q);
+    }).slice(0, 20);
+    
+    if (results.length === 0) {
+      showError('No attendees found. Try a different search term.');
+      return;
+    }
+    
+    showSearchResults(results);
+  }
+
+  // Show scanning animation
+  function showScanningAnimation() {
+    scanIndicator.style.display = 'block';
+    scanInput.classList.add('scanning');
+    resultDiv.classList.add('hidden');
+    hideSearchResults();
+  }
+
+  // Show scan success with animation
+  function showScanSuccess(attendee, hasFood) {
+    scanIndicator.style.display = 'none';
+    scanInput.classList.remove('scanning');
+    
+    const statusClass = hasFood ? 'food-yes' : 'food-no';
+    const statusText = hasFood ? 'YES' : 'NO';
+    const statusIcon = hasFood ? '✓' : '✗';
+    
+    resultDiv.innerHTML = `
+      <div class="food-status ${statusClass} scan-success">
+        <div style="font-size:32px;margin-bottom:8px">${statusIcon}</div>
+        <div>Food Included: <strong>${statusText}</strong></div>
+        <div style="font-size:14px;margin-top:8px;opacity:0.8">
+          ${attendee.name || 'Unknown'} • ${attendee.city || 'Unknown City'}
+        </div>
+      </div>
+    `;
+    resultDiv.classList.remove('hidden');
+    
+    // Add pulse effect to the scan input
+    scanInput.classList.add('pulse');
+    setTimeout(() => scanInput.classList.remove('pulse'), 300);
+  }
+
+  // Show scan error with animation
+  function showScanError(message) {
+    scanIndicator.style.display = 'none';
+    scanInput.classList.remove('scanning');
+    
+    resultDiv.innerHTML = `<div class="status bad scan-error">${message}</div>`;
+    resultDiv.classList.remove('hidden');
+    
+    // Add pulse effect to the scan input
+    scanInput.classList.add('pulse');
+    setTimeout(() => scanInput.classList.remove('pulse'), 300);
+  }
+
+  // Show food status for a single attendee (legacy function)
+  function showFoodStatus(attendee, hasFood) {
+    const statusClass = hasFood ? 'food-yes' : 'food-no';
+    const statusText = hasFood ? 'YES' : 'NO';
+    const statusIcon = hasFood ? '✓' : '✗';
+    
+    resultDiv.innerHTML = `
+      <div class="food-status ${statusClass}">
+        <div style="font-size:32px;margin-bottom:8px">${statusIcon}</div>
+        <div>Food Included: <strong>${statusText}</strong></div>
+        <div style="font-size:14px;margin-top:8px;opacity:0.8">
+          ${attendee.name || 'Unknown'} • ${attendee.city || 'Unknown City'}
+        </div>
+      </div>
+    `;
+    resultDiv.classList.remove('hidden');
+    hideSearchResults();
+  }
+
+  // Show search results
+  function showSearchResults(items) {
+    searchResultsList.innerHTML = '';
+    
+    items.forEach(item => {
+      const row = document.createElement('div');
+      row.className = 'tr';
+      
+      const foodClass = item.hasFood ? 'yes' : 'no';
+      const foodText = item.hasFood ? 'YES' : 'NO';
+      
+      row.innerHTML = `
+        <div><b>${item.name || '-'}</b><div class="small">${item.typeOfMember || ''}</div></div>
+        <div>${item.phone || '-'}</div>
+        <div>${item.email || '-'}</div>
+        <div>${item.city || '-'}</div>
+        <div class="stack">
+          <span class="food-pill ${foodClass}">${foodText}</span>
+          <button class="btn primary" onclick="selectAttendee('${item.name}', '${item.phone}', '${item.email}', '${item.city}', '${item.typeOfMember}', ${item.hasFood})" title="Select this attendee">
+            Select
+          </button>
+        </div>
+      `;
+      searchResultsList.appendChild(row);
+    });
+    
+    searchResultsDiv.classList.remove('hidden');
+    resultDiv.classList.add('hidden');
+  }
+
+  // Select attendee from search results
+  function selectAttendee(name, phone, email, city, typeOfMember, hasFood) {
+    const attendee = { name, phone, email, city, typeOfMember };
+    showFoodStatus(attendee, hasFood);
+    searchInput.value = '';
+    hideSearchResults();
+  }
+
+  // Show loading state
+  function showLoading(message) {
+    resultDiv.innerHTML = `<div class="status">${message}</div>`;
+    resultDiv.classList.remove('hidden');
+    hideSearchResults();
+  }
+
+  // Show error
+  function showError(message) {
+    resultDiv.innerHTML = `<div class="status bad">${message}</div>`;
+    resultDiv.classList.remove('hidden');
+    hideSearchResults();
+  }
+
+  // Hide search results
+  function hideSearchResults() {
+    searchResultsDiv.classList.add('hidden');
+  }
+
+  // Handle errors
+  function handleError(err) {
+    showError(`Error: ${err}`);
+  }
+
+  // Clear all inputs and results
+  function clearAll() {
+    scanInput.value = '';
+    searchInput.value = '';
+    resultDiv.classList.add('hidden');
+    hideSearchResults();
+    scanIndicator.style.display = 'none';
+    scanInput.classList.remove('scanning', 'pulse');
+    scanInput.focus();
+  }
+
+  // Keyboard shortcuts
+  document.addEventListener('keydown', function(e) {
+    // Escape to clear all
+    if (e.key === 'Escape') {
+      clearAll();
+    }
+    // Ctrl/Cmd + K to focus search
+    if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+      e.preventDefault();
+      searchInput.focus();
+    }
+  });
+
+  // Initialize app
+  function initializeApp() {
+    showLoading('Loading attendee data...');
+    
+    google.script.run
+      .withSuccessHandler(handleInitSuccess)
+      .withFailureHandler(handleInitError)
+      .initializeApp();
+  }
+
+  function handleInitSuccess(resp) {
+    if (resp.status === 'OK') {
+      // Store data globally for instant lookups
+      allData = resp.data || [];
+      
+      // Build aggregate index for instant QR lookups
+      aggregateIndex = {};
+      allData.forEach(record => {
+        if (record.aggregate) {
+          aggregateIndex[record.aggregate] = record;
+        }
+      });
+      
+      resultDiv.innerHTML = `
+        <div class="status ok">
+          <div style="text-align:center;padding:8px">
+            <div style="font-size:16px;margin-bottom:4px">🍽️ Food Lookup Ready</div>
+            <div class="small">Loaded ${allData.length} records • Instant lookups enabled</div>
+          </div>
+        </div>
+      `;
+      scanInput.focus();
+    } else {
+      showError(`Initialization failed: ${resp.message}`);
+    }
+  }
+
+  function handleInitError(err) {
+    showError(`Failed to load data: ${err}`);
+  }
+
+  // Refresh data function
+  function refreshCache() {
+    const btn = document.getElementById('refreshCacheBtn');
+    const originalText = btn.textContent;
+    btn.textContent = 'Refreshing...';
+    btn.disabled = true;
+    
+    showLoading('Refreshing data from sheet...');
+    
+    google.script.run
+      .withSuccessHandler(resp => {
+        btn.textContent = originalText;
+        btn.disabled = false;
+        
+        if (resp.status === 'OK') {
+          // Update global data
+          allData = resp.data || [];
+          
+          // Rebuild aggregate index
+          aggregateIndex = {};
+          allData.forEach(record => {
+            if (record.aggregate) {
+              aggregateIndex[record.aggregate] = record;
+            }
+          });
+          
+          resultDiv.innerHTML = `
+            <div class="status ok">
+              <div style="text-align:center;padding:8px">
+                <div style="font-size:16px;margin-bottom:4px">🍽️ Data Refreshed</div>
+                <div class="small">Loaded ${allData.length} records • Instant lookups enabled</div>
+              </div>
+            </div>
+          `;
+        } else {
+          showError(`Refresh failed: ${resp.message}`);
+        }
+      })
+      .withFailureHandler(err => {
+        btn.textContent = originalText;
+        btn.disabled = false;
+        showError(`Refresh failed: ${err}`);
+      })
+      .initializeApp();
+  }
+
+  // Start initialization
+  initializeApp();
+</script>
+</body>
+</html>

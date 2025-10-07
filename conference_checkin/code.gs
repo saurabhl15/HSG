@@ -1,5 +1,5 @@
 /** ===================== CONFIG ===================== **/
-const SPREADSHEET_ID = '1AsQHbIftBxuZyziVyiGaezKmsSVkG5xrAD9IOmbTScs';
+const SPREADSHEET_ID = '1DqrzUf3oFzbwIzCdAnCA0jEVeYSWNzts_4xSKlHjWtY';
 const SHEET_NAME = 'Schema';
 const HEADER_ROW = 1;
 
@@ -10,8 +10,11 @@ const CONFERENCE_NAME = 'Voice of Apostles';
 /** SCHEMA (must match header row in the sheet exactly) **/
 const HEADERS = [
   'ID','Name','Gender','Age','Phone','Email','Church Name','Type of Member',
-  'City','State','Country','Aggregate','QR Code','Food Included','Paid for Food'
+  'City','State','Country','Aggregate','QR Code','Food Included','Paid for Food','VIPs','VVIPs','Registration'
 ];
+
+// Fixed registration column name
+const REGISTRATION_COLUMN = 'Registration';
 
 /** ===================== SHEET HELPERS ===================== **/
 function getSheet_() {
@@ -55,47 +58,47 @@ function findRowByAggregate_(aggText) {
   return -1;
 }
 
-/** ===================== SESSIONS ===================== **/
-function ensureSessionColumn(sessionName) {
-  if (!sessionName || !String(sessionName).trim()) throw new Error('Session name required');
-  const lock = LockService.getScriptLock();
-  lock.tryLock(30000);
-  try {
-    const sh = getSheet_();
-    const headers = getHeaders_();
-    const foundIdx = headers.indexOf(sessionName);
-    if (foundIdx !== -1) return { ok: true, existed: true, col: foundIdx + 1 };
-    const lastCol = sh.getLastColumn();
-    sh.insertColumnAfter(lastCol); // never overwrite
-    const newCol = lastCol + 1;
-    sh.getRange(HEADER_ROW, newCol).setValue(sessionName);
-    SpreadsheetApp.flush();
-    return { ok: true, existed: false, col: newCol };
-  } finally {
-    lock.releaseLock();
-  }
-}
-function startSession(sessionName) {
-  if (!sessionName || !String(sessionName).trim())
-    return { status: 'ERROR', message: 'Please provide a session name.' };
-  const headers = getHeaders_();
-  const idx = headers.indexOf(sessionName);
-  if (idx !== -1) return { status: 'EXISTS', sessionName, col: idx + 1 };
+/** ===================== SESSIONS (COMMENTED OUT - NOW USING FIXED REGISTRATION COLUMN) ===================== **/
+// function ensureSessionColumn(sessionName) {
+//   if (!sessionName || !String(sessionName).trim()) throw new Error('Session name required');
+//   const lock = LockService.getScriptLock();
+//   lock.tryLock(30000);
+//   try {
+//     const sh = getSheet_();
+//     const headers = getHeaders_();
+//     const foundIdx = headers.indexOf(sessionName);
+//     if (foundIdx !== -1) return { ok: true, existed: true, col: foundIdx + 1 };
+//     const lastCol = sh.getLastColumn();
+//     sh.insertColumnAfter(lastCol); // never overwrite
+//     const newCol = lastCol + 1;
+//     sh.getRange(HEADER_ROW, newCol).setValue(sessionName);
+//     SpreadsheetApp.flush();
+//     return { ok: true, existed: false, col: newCol };
+//   } finally {
+//     lock.releaseLock();
+//   }
+// }
+// function startSession(sessionName) {
+//   if (!sessionName || !String(sessionName).trim())
+//     return { status: 'ERROR', message: 'Please provide a session name.' };
+//   const headers = getHeaders_();
+//   const idx = headers.indexOf(sessionName);
+//   if (idx !== -1) return { status: 'EXISTS', sessionName, col: idx + 1 };
 
-  const sh = getSheet_();
-  const lock = LockService.getScriptLock();
-  lock.tryLock(30000);
-  try {
-    const lastCol = sh.getLastColumn();
-    sh.insertColumnAfter(lastCol);
-    const newCol = lastCol + 1;
-    sh.getRange(HEADER_ROW, newCol).setValue(sessionName);
-    SpreadsheetApp.flush();
-    return { status: 'CREATED', sessionName, col: newCol };
-  } finally {
-    lock.releaseLock();
-  }
-}
+//   const sh = getSheet_();
+//   const lock = LockService.getScriptLock();
+//   lock.tryLock(30000);
+//   try {
+//     const lastCol = sh.getLastColumn();
+//     sh.insertColumnAfter(lastCol);
+//     const newCol = lastCol + 1;
+//     sh.getRange(HEADER_ROW, newCol).setValue(sessionName);
+//     SpreadsheetApp.flush();
+//     return { status: 'CREATED', sessionName, col: newCol };
+//   } finally {
+//     lock.releaseLock();
+//   }
+// }
 
 /** ========= FORMULA EXTENSION HELPERS (ID & Aggregate copy-down) ========= **/
 /**
@@ -145,36 +148,92 @@ function togglePaidForFood(row, explicitValue) {
   if (typeof explicitValue === 'boolean') next = explicitValue ? 'Yes' : 'No';
   else next = (curr === 'yes') ? 'No' : 'Yes';
   sh.getRange(row, col).setValue(next);
+  
+  // Add timestamp note
+  const ts = new Date();
+  const cell = sh.getRange(row, col);
+  const prev = cell.getNote() || '';
+  const action = next === 'Yes' ? 'Food Paid' : 'Food Unpaid';
+  cell.setNote(`${prev}\n${action}: ${ts.toLocaleString()}`);
+  
   return getRecordByRow_(row);
 }
 
-function checkInByAggregate(aggText, sessionName) {
+function registerByAggregate(aggText) {
   if (!aggText || !String(aggText).trim())
     return { status: 'ERROR', message: 'Empty scan.' };
-  if (!sessionName || !String(sessionName).trim())
-    return { status: 'ERROR', message: 'No session set.' };
 
   const row = findRowByAggregate_(aggText);
   if (row === -1) return { status: 'NOT_FOUND', aggregate: aggText };
 
-  const sessionCol = ensureSessionColumn(sessionName).col;
+  const regCol = colIndex_(REGISTRATION_COLUMN);
   const sh = getSheet_();
-  sh.getRange(row, sessionCol).setValue('Yes');
+  sh.getRange(row, regCol).setValue('Yes');
   const ts = new Date();
-  const cell = sh.getRange(row, sessionCol);
+  const cell = sh.getRange(row, regCol);
   const prev = cell.getNote() || '';
-  cell.setNote(`${prev}\nChecked in: ${ts.toLocaleString()}`);
-  return { status: 'CHECKED_IN', row, attendee: getRecordByRow_(row) };
+  cell.setNote(`${prev}\nRegistered: ${ts.toLocaleString()}`);
+  
+  const attendee = getRecordByRow_(row);
+  
+  // Determine band color based on VVIP/VIP status
+  const vvipValue = String(attendee['VVIPs'] || '').trim();
+  const vipValue = String(attendee['VIPs'] || '').trim();
+  
+  let bandColor = 'blue'; // default
+  if (vvipValue && vvipValue.toLowerCase() === 'yes') {
+    bandColor = 'yellow';
+  } else if (vipValue && vipValue.toLowerCase() === 'yes') {
+    bandColor = 'green';
+  }
+  
+  return { status: 'REGISTERED', row, attendee: attendee, bandColor: bandColor };
+}
+
+function toggleRegistration(row) {
+  const sh = getSheet_();
+  const regCol = colIndex_(REGISTRATION_COLUMN);
+  const curr = String(sh.getRange(row, regCol).getValue() || '').trim().toLowerCase();
+  const next = (curr === 'yes') ? '' : 'Yes';
+  sh.getRange(row, regCol).setValue(next);
+  
+  const ts = new Date();
+  const cell = sh.getRange(row, regCol);
+  const prev = cell.getNote() || '';
+  const action = next === 'Yes' ? 'Registered' : 'Unregistered';
+  cell.setNote(`${prev}\n${action}: ${ts.toLocaleString()}`);
+  
+  const attendee = getRecordByRow_(row);
+  
+  // Determine band color if registering
+  let bandColor = 'blue';
+  if (next === 'Yes') {
+    const vvipValue = String(attendee['VVIPs'] || '').trim();
+    const vipValue = String(attendee['VIPs'] || '').trim();
+    
+    if (vvipValue && vvipValue.toLowerCase() === 'yes') {
+      bandColor = 'yellow';
+    } else if (vipValue && vipValue.toLowerCase() === 'yes') {
+      bandColor = 'green';
+    }
+  }
+  
+  return { attendee: attendee, bandColor: bandColor };
+}
+
+// Legacy function name for backward compatibility
+function checkInByAggregate(aggText, sessionName) {
+  return registerByAggregate(aggText);
 }
 
 /**
  * Spot Registration
  * - No Aggregate asked
  * - No random ID; formulas fill ID & Aggregate
- * - Optionally check in immediately (if sessionName provided)
+ * - Optionally register immediately (if shouldRegister is true)
  */
-function spotRegister(att, sessionName) {
-  console.log('spotRegister called with:', att, sessionName);
+function spotRegister(att, shouldRegister) {
+  console.log('spotRegister called with:', att, shouldRegister);
   const sh = getSheet_();
 
   // Build row: leave ID/Aggregate blank – formulas will populate
@@ -237,15 +296,15 @@ function spotRegister(att, sessionName) {
     }
   }
 
-  // Optional immediate check-in
-  if (sessionName && String(sessionName).trim()) {
-    const sessionCol = ensureSessionColumn(sessionName).col;
-    sh.getRange(newRow, sessionCol).setValue('Yes');
+  // Optional immediate registration
+  if (shouldRegister) {
+    const regCol = colIndex_(REGISTRATION_COLUMN);
+    sh.getRange(newRow, regCol).setValue('Yes');
     const ts = new Date();
-    const cell = sh.getRange(newRow, sessionCol);
+    const cell = sh.getRange(newRow, regCol);
     const prev = cell.getNote() || '';
-    cell.setNote(`${prev}\nChecked in via Spot Reg: ${ts.toLocaleString()}`);
-    console.log('Checked in to session:', sessionName);
+    cell.setNote(`${prev}\nRegistered via Spot Reg: ${ts.toLocaleString()}`);
+    console.log('Registered immediately');
   }
 
   // Get the final attendee record
@@ -265,9 +324,9 @@ function spotRegister(att, sessionName) {
 /** ===================== SEARCH / LOOKUP ===================== **/
 /**
  * Simple search over Name / Phone / Email (case-insensitive, substring).
- * Returns up to 20 rows. Session name is accepted only for future extensions.
+ * Returns up to 20 rows.
  */
-function searchAttendees(query, _sessionName){
+function searchAttendees(query){
   const q = String(query || '').trim().toLowerCase();
   if (!q) return {items:[]};
   const sh = getSheet_();
@@ -301,33 +360,104 @@ function getByRow(row){
 }
 
 /** ===================== STATS ===================== **/
-function getSessionStats(sessionName) {
-  if (!sessionName || !String(sessionName).trim())
-    return { status: 'ERROR', message: 'Please set a session name.' };
-
+function getRegistrationStats() {
   const headers = getHeaders_();
-  const idx = headers.indexOf(sessionName);
-  if (idx === -1) return { status: 'OK', session: sessionName, totalCheckedIn: 0, withFoodAmongCheckedIn: 0, bangalore: 0, outstation: 0 };
-
+  const regIdx = headers.indexOf(REGISTRATION_COLUMN);
+  
   const sh = getSheet_();
   const data = sh.getRange(HEADER_ROW + 1, 1, Math.max(0, sh.getLastRow() - HEADER_ROW), sh.getLastColumn()).getValues();
-  const colSession = idx, colFoodInc = headers.indexOf('Food Included'), colPaid = headers.indexOf('Paid for Food'), colCity = headers.indexOf('City');
-  let total = 0, withFood = 0, bangalore = 0, outstation = 0;
+  
+  const colFoodInc = headers.indexOf('Food Included');
+  const colPaid = headers.indexOf('Paid for Food');
+  const colCity = headers.indexOf('City');
+  const colVIP = headers.indexOf('VIPs');
+  const colVVIP = headers.indexOf('VVIPs');
+  
+  let totalAttendees = data.length;
+  let totalRegistered = 0;
+  let withFood = 0;
+  let bangalore = 0;
+  let outstation = 0;
+  let vipsRegistered = 0;
+  let vvipsRegistered = 0;
+  
+  // New metrics for registered attendees only
+  let registeredOutstation = 0;
+  let registeredBangalore = 0;
+  let registeredPaidForFood = 0;
+  
   data.forEach(r => {
-    if (String(r[colSession] || '').trim().toLowerCase() === 'yes') {
-      total++;
-      if (String(r[colFoodInc] || '').toLowerCase() === 'yes' || String(r[colPaid] || '').toLowerCase() === 'yes') withFood++;
+    // Check if registered
+    const isRegistered = regIdx !== -1 && String(r[regIdx] || '').trim().toLowerCase() === 'yes';
+    
+    if (isRegistered) {
+      totalRegistered++;
       
-      // Check if Bangalore or Outstation
+      // Count VIPs and VVIPs among registered attendees
+      if (colVIP !== -1 && String(r[colVIP] || '').trim().toLowerCase() === 'yes') {
+        vipsRegistered++;
+      }
+      if (colVVIP !== -1 && String(r[colVVIP] || '').trim().toLowerCase() === 'yes') {
+        vvipsRegistered++;
+      }
+      
+      // New metrics for registered attendees only
       const city = String(r[colCity] || '').trim().toLowerCase();
+      const paidForFood = String(r[colPaid] || '').toLowerCase() === 'yes';
+      
+      // Count registered outstation (registered attendees who are NOT from Bangalore)
+      if (city !== 'bangalore' && city !== 'bengaluru' && city !== '') {
+        registeredOutstation++;
+      }
+      
+      // Count registered Bangalore
       if (city === 'bangalore' || city === 'bengaluru') {
-        bangalore++;
-      } else if (city && city !== '') {
-        outstation++;
+        registeredBangalore++;
+      }
+      
+      // Count registered with paid food
+      if (paidForFood) {
+        registeredPaidForFood++;
       }
     }
+    
+    // Count food (overall, not just registered)
+    // Show food as yes if city is not Bangalore or paid for food
+    const city = String(r[colCity] || '').trim().toLowerCase();
+    const isNotBangalore = city !== 'bangalore' && city !== 'bengaluru' && city !== '';
+    const paidForFood = String(r[colPaid] || '').toLowerCase() === 'yes';
+    const foodIncluded = String(r[colFoodInc] || '').toLowerCase() === 'yes';
+    
+    if (isNotBangalore || paidForFood || foodIncluded) {
+      withFood++;
+    }
+    
+    // Count Bangalore and Outstation (overall)
+    if (city === 'bangalore' || city === 'bengaluru') {
+      bangalore++;
+    } else if (city && city !== '') {
+      outstation++;
+    }
   });
-  return { status: 'OK', session: sessionName, totalCheckedIn: total, withFoodAmongCheckedIn: withFood, bangalore: bangalore, outstation: outstation };
+  
+  return { 
+    status: 'OK',
+    totalAttendees: totalAttendees,
+    totalRegistered: totalRegistered, 
+    withFood: withFood, 
+    bangalore: bangalore, 
+    outstation: outstation,
+    vipsRegistered: vipsRegistered,
+    vvipsRegistered: vvipsRegistered,
+    registeredOutstation: registeredOutstation,
+    registeredBangalore: registeredBangalore,
+    registeredPaidForFood: registeredPaidForFood
+  };
+}
+
+// Legacy function for backward compatibility
+function getSessionStats(sessionName) {
+  return getRegistrationStats();
 }
 
 /** ===================== UI ===================== **/
