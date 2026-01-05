@@ -161,16 +161,14 @@ def send_email_with_qr(recipient_email, recipient_name, qr_image_bytes, venue_de
         server.login(SENDER_EMAIL, SENDER_PASSWORD)
         server.sendmail(SENDER_EMAIL, [recipient_email], msg.as_string())
 
-def send_confirmation_email(recipient_email, recipient_name, venue_details):
-    """Sends a confirmation email without QR code."""
-    msg = MIMEMultipart('alternative')
+def send_confirmation_email(recipient_email, recipient_name):
+    """Sends a confirmation email for Holy Spirit Conference 2026 with accommodation details."""
+    msg = MIMEMultipart('related')
     msg['From'] = SENDER_EMAIL
     msg['To'] = recipient_email
-    msg['Subject'] = "Voice of Apostle 2025 - Apostolic Commision and Impartation"
+    msg['Subject'] = "Holy Spirit Conference 2026 - Registration Confirmation"
 
-    venue_details = venue_details.replace('\n', '<br>')
-
-    # Email body for confirmation
+    # Email body for Holy Spirit Conference 2026 confirmation
     html_body = f"""
     <html>
     <body style="margin:0;padding:0;background-color:#f5f7fb;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Oxygen,Ubuntu,Cantarell,'Helvetica Neue',Arial,sans-serif;color:#1f2937;">
@@ -180,18 +178,38 @@ def send_confirmation_email(recipient_email, recipient_name, venue_details):
               <table width="600" cellpadding="0" cellspacing="0" role="presentation" style="max-width:600px;width:100%;background:#ffffff;border-radius:12px;box-shadow:0 4px 24px rgba(0,0,0,0.08);overflow:hidden;">
                 <tr>
                   <td style="padding:28px 28px 18px 28px;background:linear-gradient(135deg,#2563eb 0%, #1d4ed8 100%);color:#ffffff;">
-                    <h2 style="margin:0;font-size:22px;line-height:28px;font-weight:700;">Voice of Apostles 2025</h2>
+                    <h2 style="margin:0;font-size:22px;line-height:28px;font-weight:700;">Holy Spirit Conference 2026</h2>
+                    <p style="margin:6px 0 0 0;font-size:14px;opacity:0.95;">Registration Confirmation</p>
                   </td>
                 </tr>
                 <tr>
                   <td style="padding:28px;">
                     <p style="margin:0 0 16px 0;font-size:16px;line-height:24px;">Dear <strong>{recipient_name}</strong>,</p>
-                    <p style="margin:0 0 16px 0;font-size:15px;line-height:22px;text-align:justify;">Thanks for attending the Voice of Apostles 2025 conference.</p>
-                    <p style="margin:0 0 20px 0;font-size:15px;line-height:22px;text-align:justify;">Please click the link below to download the Message attached <strong>"Apostolic Commission and Impartation"</strong>.</p>
-                    <div style="margin:0 0 24px 0;text-align:center;">
-                      <a href="https://drive.google.com/file/d/1c5c7ZTvxoqK2VWQ5-xanwU0onbBguiHA/view?usp=sharing" style="display:inline-block;padding:14px 26px;background:#2563eb;color:#ffffff;text-decoration:none;font-weight:600;border-radius:9999px;">Download Message</a>
+                    <p style="margin:0 0 20px 0;font-size:15px;line-height:22px;">We confirm your registration for Holy Spirit Conference 2026.</p>
+                    
+                    <div style="margin:20px 0;padding:20px;background:#f8fafc;border-radius:10px;border-left:4px solid #2563eb;">
+                      <h3 style="margin:0 0 12px 0;font-size:16px;color:#1f2937;">CONFERENCE TIMINGS:</h3>
+                      <p style="margin:0 0 8px 0;font-size:14px;line-height:20px;"><strong>13th May 2026, 6:00PM</strong></p>
+                      <p style="margin:0 0 8px 0;font-size:14px;line-height:20px;"><strong>14th May - 16th May 2026, 9:00AM to 9:00PM</strong></p>
+                      <p style="margin:0 0 0 0;font-size:14px;line-height:20px;"><strong>17th May 2026, 9:00AM to 1:00PM</strong></p>
                     </div>
-                    <p style="margin:0 0 24px 0;font-size:15px;line-height:22px;text-align:justify;">Love and Regards,<br>Apostle Dr. P.S. Rambabu</p>
+                    
+                    <p style="margin:20px 0 12px 0;font-size:15px;line-height:22px;">Kindly book your accommodation, below are the details for your reference:</p>
+                    
+                    <div style="margin:20px 0;padding:20px;background:#fffacd;border:2px solid #000;border-radius:10px;text-align:center;">
+                      <div style="font-size:16px;font-weight:bold;margin-bottom:10px;">FOR ACCOMMODATION PLEASE CONTACT DIRECTLY</div>
+                      <div style="font-size:14px;font-weight:bold;margin:15px 0 10px 0;">SERVICED APARTMENT</div>
+                      <div style="text-align:left;margin:10px 0;">
+                        <div style="margin:5px 0;font-size:14px;"><strong>EMERALD SUITES</strong> - 91486 92077</div>
+                        <div style="margin:5px 0;font-size:14px;"><strong>STERLING WOOD</strong> - 83289 96114</div>
+                        <div style="margin:5px 0;font-size:14px;"><strong>EMERALD GRAND</strong> - 98454 12877</div>
+                        <div style="margin:5px 0;font-size:14px;"><strong>EBENEZER SUITES</strong> - 89491 81147</div>
+                        <div style="margin:5px 0;font-size:14px;"><strong>GOSHEN INN SUITES</strong> - 9620775552/3/4</div>
+                        <div style="margin:5px 0;font-size:14px;"><strong>DORMITORY</strong> - 9535290050</div>
+                      </div>
+                    </div>
+                    <p style="margin:24px 0 0 0;font-size:15px;line-height:22px;">Please watch out for communication from the conference@rwo.life mailer in the future for further details.</p>
+                    <p style="margin:24px 0 0 0;font-size:15px;line-height:22px;">Thanks & Regards,<br><strong>RWO Conference Registrations</strong></p>
                   </td>
                 </tr>
               </table>
@@ -233,9 +251,9 @@ def process_excel_and_send_emails(excel_file_path, retry_errors_only=False, batc
     try:
         df = pd.read_excel(excel_file_path, engine='openpyxl')
 
-        # For confirmation-only mode, we don't need the Aggregate column
+        # For confirmation-only mode, we need the new schema columns
         if confirmation_only:
-            required_columns = {'ID', 'Name', 'Email', 'Registration'}
+            required_columns = {'Unique ID', 'Name', 'Email'}
         else:
             required_columns = {'ID', 'Name', 'Email', 'Aggregate'}
             
@@ -248,19 +266,25 @@ def process_excel_and_send_emails(excel_file_path, retry_errors_only=False, batc
 
         for index, row in df.iterrows():
             counters['total'] += 1
-            id_val = str(row['ID'])
+            
+            # Use different ID column based on mode
+            if confirmation_only:
+                id_val = str(row['Unique ID'])
+            else:
+                id_val = str(row['ID'])
 
-            # Check if this is a VIP or VVIP
+            # Check if this is a VIP or VVIP (only for non-confirmation mode)
             is_vip = False
             band_color = ""
             
-            # Check for VIP/VVIP columns if they exist
-            if 'VIPs' in df.columns and pd.notna(row['VIPs']) and str(row['VIPs']).lower() in ['yes', 'true', '1']:
-                is_vip = True
-                band_color = "green"
-            elif 'VVIPs' in df.columns and pd.notna(row['VVIPs']) and str(row['VVIPs']).lower() in ['yes', 'true', '1']:
-                is_vip = True
-                band_color = "yellow"
+            if not confirmation_only:
+                # Check for VIP/VVIP columns if they exist
+                if 'VIPs' in df.columns and pd.notna(row['VIPs']) and str(row['VIPs']).lower() in ['yes', 'true', '1']:
+                    is_vip = True
+                    band_color = "green"
+                elif 'VVIPs' in df.columns and pd.notna(row['VVIPs']) and str(row['VVIPs']).lower() in ['yes', 'true', '1']:
+                    is_vip = True
+                    band_color = "yellow"
 
             if retry_errors_only and id_val not in error_ids:
                 continue
@@ -274,21 +298,11 @@ def process_excel_and_send_emails(excel_file_path, retry_errors_only=False, batc
 
             name = row['Name']
             email = row['Email']
-            registered_value = str(row.get('Registration', '')).strip().lower() if 'Registration' in df.columns else ''
-            venue_details = 'NEW CREATION MINISTRIES<br> \
-            No. 3, Byrathi Village,<br> \
-            Bidarahalli Hobli, Kothanur,<br> \
-            Near Legacy School & Moto Mind,<br> \
-            Bangalore - 560077, Karnataka, India'
-
+            
             if confirmation_only:
-                if registered_value not in ['yes', 'y', 'true', '1']:
-                    counters['skipped'] += 1
-                    print(f"[{id_val}] Skipped {email} - Registered status is '{row.get('Registration', '')}'")
-                    continue
-                # Send confirmation email without QR code
+                # Send confirmation email for Holy Spirit Conference 2026
                 try:
-                    send_confirmation_email(email, name, venue_details)
+                    send_confirmation_email(email, name)
                     print(f"[{id_val}] Confirmation email sent to {email}")
                     counters['sent'] += 1
                     append_to_file('mails_sent.txt', id_val)
@@ -300,6 +314,11 @@ def process_excel_and_send_emails(excel_file_path, retry_errors_only=False, batc
             else:
                 # Original QR code logic
                 aggregate = str(row['Aggregate'])
+                venue_details = 'NEW CREATION MINISTRIES<br> \
+                No. 3, Byrathi Village,<br> \
+                Bidarahalli Hobli, Kothanur,<br> \
+                Near Legacy School & Moto Mind,<br> \
+                Bangalore - 560077, Karnataka, India'
 
                 try:
                     qr_bytes = generate_qr_code(aggregate)
@@ -327,8 +346,8 @@ def process_excel_and_send_emails(excel_file_path, retry_errors_only=False, batc
             # Batch control
             batch_count += 1
             if batch_count % batch_size == 0:
-                print(f"\nBatch limit reached ({batch_size}). Pausing for 0 seconds...\n")
-                time.sleep(0)
+                print(f"\nBatch limit reached ({batch_size}). Pausing for 60 seconds...\n")
+                time.sleep(60)
 
     except FileNotFoundError:
         print(f"Error: Excel file not found at {excel_file_path}")
