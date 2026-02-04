@@ -160,3 +160,168 @@ Key points:
 Using this template consistently will make the CSV clean and reliable.
 
 
+---
+
+## Midweek option normalization
+
+The parser has been extended to support a **midweek WhatsApp template** with
+Yes/No/No update style questions such as:
+
+- `Interested in Powerhouse`
+- `Powerhouse Available`
+- `Connected to Powerhouse`
+
+For these midweek fields, the script interprets option values as follows:
+
+- **Yes**: values like `Yes`, `Y`, `yes.`, etc. are stored canonically as `Yes`.
+- **No**: values like `No`, `N`, `no.`, etc. are stored canonically as `No`.
+- **No update** (leave unchanged):
+  - Values like `No update`, `no update`, `NO UPDATE`, with any spacing/punctuation.
+  - Shorthand such as `N.A.`, `N/A`, `NA`.
+  - Completely blank values.
+  - All of these are normalized to the canonical value `No update`.
+- **Anything else**: any other non-empty text is preserved as-is so that
+  important free-text notes are not lost.
+
+When applying midweek updates to the newcomers CSV, a canonical `No update`
+value will be treated as **“leave the existing value unchanged”** for that
+field rather than writing the words `No update` into the sheet.
+
+
+## Midweek updates – template, behavior, and edge cases
+
+The parser now supports a **midweek WhatsApp template** that lets volunteers
+update newcomer follow-up status during the week using a short form that is
+separate from the main newcomer template.
+
+Midweek updates are detected **from the same WhatsApp export file** as regular
+newcomer updates, so you still run the script **once** and it will:
+
+- Parse regular newcomer templates into `followup_output.csv`.
+- Parse midweek templates and apply changes into the newcomers sheet.
+
+---
+
+### Midweek WhatsApp template
+
+Use the following template in the Followup Team group for midweek updates:
+
+```text
+1. *Newcomer ID*: HSGNC0001
+2. *Name*: <newcomer name>
+3. *Interested in Powerhouse*: <Yes / No / No update>
+4. *Powerhouse Available*: <Yes / No / No update>
+5. *Connected to Powerhouse*: <Yes / No / No update>
+6. *Update*: <free-text update or "No update">
+```
+
+Key expectations:
+
+- **Newcomer ID is required**
+  - The parser uses `Newcomer ID` to find the correct row in the newcomers CSV.
+  - If `Newcomer ID` is missing or empty, that midweek block is ignored.
+- **Field labels**
+  - The script recognizes `Newcomer ID`, `Name` (or `Newcomer Name`), `Interested in Powerhouse`,
+    `Powerhouse Available`, `Connected to Powerhouse`, and `Update`.
+  - Bolding (`*Field*`) and numbering (`1.`, `2.`) are optional; spacing and casing are handled
+    generously, but spelling of the core words should match.
+- **Multiple blocks per message**
+  - Like the main template, a single WhatsApp message can contain **multiple midweek blocks**,
+    each starting with a `Newcomer ID` line.
+
+---
+
+### Where midweek updates are stored
+
+Midweek data is applied into the main newcomers sheet:
+
+- **Main newcomers CSV**
+  - File: `followup_parser/hsg_newcomers_2026.csv` (relative to the repository root).
+  - Additional midweek columns in the sheet:
+    - `Interested in Powerhouse`
+    - `Powerhouse Available`
+    - `Connected to Powerhouse`
+    - `Midweek Update Notes`
+  - When midweek updates are applied, these columns are updated for matching `Newcomer ID`s,
+    and free-text notes are appended into `Midweek Update Notes` instead of overwriting history.
+
+- **Midweek updates report**
+  - File: `followup_parser/midweek_updates_applied.csv`.
+  - Each row summarizes a single applied midweek update:
+    - `Newcomer ID`, canonical `Newcomer Name`
+    - Normalized values for `Interested in Powerhouse`, `Powerhouse Available`,
+      and `Connected to Powerhouse`
+    - The raw cleaned `Update` text
+
+If no valid midweek updates are found, these files are left unchanged or not created.
+
+---
+
+### Running the script with midweek updates
+
+The **CLI interface is unchanged**. You still run:
+
+```bash
+cd path/to/HSG/followup_parser
+
+python3 parse_followup_updates.py \
+  --file /absolute/path/to/followup_chat.txt \
+  --start-date 05/01/2026 \
+  --end-date 05/01/2026 \
+  --output followup_output.csv
+```
+
+In a single run the script will:
+
+1. Parse regular newcomer templates into the `--output` CSV (default `followup_output.csv`).
+2. Assign `Newcomer ID`s for those newcomers and append them into `hsg_newcomers_2026.csv`.
+3. Re-scan the same WhatsApp export for **midweek** templates within the same date range.
+4. Match midweek updates to existing newcomers by `Newcomer ID`.
+5. Apply midweek changes to the in-memory newcomers dataset.
+6. Persist the updated newcomers sheet and write `midweek_updates_applied.csv` when applicable.
+
+You do **not** need any extra flags to enable midweek behavior.
+
+---
+
+### How midweek option values are interpreted
+
+For the Yes/No/No update style midweek fields:
+
+- **Yes**
+  - Values like `Yes`, `Y`, `yes.`, `"Yes"`, `Yes!` are all stored as `Yes`.
+- **No**
+  - Values like `No`, `N`, `no?`, `"No"`, `No,` are all stored as `No`.
+- **No update** (leave unchanged)
+  - Values like `No update`, `no update`, `NO UPDATE`, with any spacing or punctuation.
+  - Shorthand such as `N.A.`, `N/A`, `NA`.
+  - Completely blank values.
+  - All of these normalize to the canonical value `No update`.
+- **Anything else**
+  - Any other non-empty text is preserved as-is so important notes are not lost.
+
+When applying midweek updates to the newcomers CSV:
+
+- A canonical `No update` **does not overwrite** the existing value in that column
+  (it is treated as “leave unchanged”).
+- The same `No update` detection is also applied to the free-text `Update` line so that
+  things like `"No update"` or `N.A.` do **not** clutter `Midweek Update Notes`.
+
+---
+
+### Midweek edge cases and how they are handled
+
+- **Missing `Newcomer ID`**
+  - Midweek blocks without a `Newcomer ID` are treated as invalid and skipped.
+  - These do not stop the script; they are simply ignored.
+- **Unknown `Newcomer ID`**
+  - If a midweek block has an ID that does not match any row in `hsg_newcomers_2026.csv`,
+    that update is skipped and a warning is printed to the console.
+- **Partial or malformed midweek messages**
+  - If only some fields are present, only those fields are considered for updates;
+    others are left unchanged.
+  - Completely empty or unusable blocks are ignored.
+- **No midweek updates in the file**
+  - The script behaves exactly as before: only the regular newcomer CSV is produced,
+    with no midweek changes written.
+
