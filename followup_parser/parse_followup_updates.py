@@ -968,26 +968,44 @@ def main():
     parser.add_argument("--start-date", required=True, help="Start date (DD/MM/YYYY)")
     parser.add_argument("--end-date", required=True, help="End date (DD/MM/YYYY)")
     parser.add_argument("--output", default="followup_output.csv", help="CSV output filename")
+    parser.add_argument(
+        "--only-midweek",
+        action="store_true",
+        help=(
+            "Only parse and apply midweek updates from the WhatsApp export; "
+            "skip regular newcomer follow-up parsing and CSV output."
+        ),
+    )
 
     args = parser.parse_args()
 
     start_date = datetime.strptime(args.start_date, "%d/%m/%Y").date()
     end_date = datetime.strptime(args.end_date, "%d/%m/%Y").date()
 
-    records = parse_whatsapp_file(args.file, start_date, end_date)
-
-    # Determine the newcomers sheet path and assign newcomer IDs
     sheet_path = os.path.join(os.path.dirname(__file__), NEWCOMERS_SHEET_NAME)
-    start_id = get_last_newcomer_id(sheet_path)
 
-    for idx, record in enumerate(records):
-        record["Newcomer ID"] = format_newcomer_id(start_id + idx + 1)
+    # -----------------------------------------------------------------
+    # Regular newcomer follow-up parsing and CSV output.
+    # Skipped when --only-midweek is provided.
+    # -----------------------------------------------------------------
+    if not args.only_midweek:
+        records = parse_whatsapp_file(args.file, start_date, end_date)
 
-    write_csv(records, args.output)
-    append_newcomers_sheet(records, sheet_path)
+        # Determine the starting newcomer ID based on the existing sheet.
+        start_id = get_last_newcomer_id(sheet_path)
 
-    print(f"Done! Parsed {len(records)} follow-up updates.")
-    print(f"CSV written to: {args.output}")
+        for idx, record in enumerate(records):
+            record["Newcomer ID"] = format_newcomer_id(start_id + idx + 1)
+
+        write_csv(records, args.output)
+        append_newcomers_sheet(records, sheet_path)
+
+        print(f"Done! Parsed {len(records)} follow-up updates.")
+        print(f"CSV written to: {args.output}")
+    else:
+        print(
+            "Skipping regular newcomer follow-up parsing because --only-midweek was provided."
+        )
 
     # -----------------------------------------------------------------
     # Task 9: Integrate midweek parsing into the CLI workflow.
