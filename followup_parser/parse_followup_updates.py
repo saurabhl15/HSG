@@ -13,7 +13,13 @@ def normalize_unicode_spaces(text: str) -> str:
     # Replace various unicode spaces with normal space, collapse multiples
     if text is None:
         return ""
-    text = text.replace("\u202F", " ").replace("\xa0", " ")
+    text = (
+        text.replace("\u202F", " ")
+        .replace("\xa0", " ")
+        .replace("\u200e", "")
+        .replace("\u200f", "")
+        .replace("\ufeff", "")
+    )
     text = re.sub(r"\s+", " ", text)
     return text.strip()
 
@@ -24,8 +30,18 @@ def normalize_unicode_spaces(text: str) -> str:
 
 # New WhatsApp export format, e.g.:
 # [2025-12-08, 9:50:53 AM] ~ SR: message...
+# [2026-03-22, 19:06:25] ~ SR: message...
+WHATSAPP_TIME_REGEX = r"(\d{1,2}:\d{2}(?::\d{2})?(?:\s*[APMapm]{2})?)"
 WHATSAPP_REGEX_V2 = re.compile(
-    r"^\[(\d{4}-\d{2}-\d{2}),\s*([\d:]+\s*[APMapm]{2})\]\s*(?:~\s*)?(.*?)\s*:\s*(.*)$",
+    rf"^\[(\d{{4}}-\d{{2}}-\d{{2}}),\s*{WHATSAPP_TIME_REGEX}\]\s*(?:~\s*)?(.*?)\s*:\s*(.*)$",
+    re.IGNORECASE,
+)
+
+# Common bracketed slash-date format, e.g.:
+# [29/03/26, 11:14:58 PM] ~ Swee: message...
+# [29/03/2026, 11:14:58 PM] John Doe: message...
+WHATSAPP_REGEX_V3 = re.compile(
+    rf"^\[(\d{{1,2}}/\d{{1,2}}/\d{{2,4}}),\s*{WHATSAPP_TIME_REGEX}\]\s*(?:~\s*)?(.*?)\s*:\s*(.*)$",
     re.IGNORECASE,
 )
 
@@ -45,18 +61,24 @@ WHATSAPP_REGEX_V1 = re.compile(
 #   - optional leading "1. " or "2. "
 #   - optional * around the field name
 #   - colon and value
+# Patterns tolerate:
+#   - optional numbering ("1. Field:")
+#   - bold markers around the label ("*Field*:")
+#   - colon inside or outside bold ("*Field* :" / "*Field :*")
 FIELD_PATTERNS = {
-    "Newcomer Name": r"(?:\d+\.\s*)?\*?Newcomer Name\*?\s*:\s*(.*)",
-    "Area": r"(?:\d+\.\s*)?\*?Area\*?\s*:\s*(.*)",
-    "Outstation": r"(?:\d+\.\s*)?\*?Outstation\*?\s*:\s*(.*)",
-    "Planted in another church": r"(?:\d+\.\s*)?\*?Planted in another church\*?\s*:\s*(.*)",
-    "Service Attended": r"(?:\d+\.\s*)?\*?Service Attended\*?\s*:\s*(.*)",
-    "Came for Healing": r"(?:\d+\.\s*)?\*?Came for Healing\*?\s*:\s*(.*)",
-    "New Believer": r"(?:\d+\.\s*)?\*?New Believer\*?\s*:\s*(.*)",
-    "Showing desire to grow in the Lord": r"(?:\d+\.\s*)?\*?Showing desire to grow in the Lord\*?\s*:\s*(.*)",
-    "Showing interest in being part of HSG": r"(?:\d+\.\s*)?\*?Showing interest in being part of HSG\*?\s*:\s*(.*)",
-    "Action Required": r"(?:\d+\.\s*)?\*?Action Required\*?\s*:\s*(.*)",
-    "Comments": r"(?:\d+\.\s*)?\*?Comments\*?\s*:\s*(.*)",
+    "Newcomer Name": r"(?:\d+\.\s*)?\*?Newcomer Name\s*\*?\s*:\s*\*?\s*(.*)",
+    "Area": r"(?:\d+\.\s*)?\*?Area\s*\*?\s*:\s*\*?\s*(.*)",
+    "Outstation": r"(?:\d+\.\s*)?\*?Outstation\s*\*?\s*:\s*\*?\s*(.*)",
+    "Planted in another church": r"(?:\d+\.\s*)?\*?Planted in another church\s*\*?\s*:\s*\*?\s*(.*)",
+    "Service Attended": r"(?:\d+\.\s*)?\*?Service Attended\s*\*?\s*:\s*\*?\s*(.*)",
+    "Came for Healing": r"(?:\d+\.\s*)?\*?Came for Healing\s*\*?\s*:\s*\*?\s*(.*)",
+    "Healing Progress": r"(?:\d+\.\s*)?\*?Healing Progress\s*\*?\s*:\s*\*?\s*(.*)",
+    "New Believer": r"(?:\d+\.\s*)?\*?New Believer\s*\*?\s*:\s*\*?\s*(.*)",
+    "Showing desire to grow in the Lord": r"(?:\d+\.\s*)?\*?Showing desire to grow in the Lord\s*\*?\s*:\s*\*?\s*(.*)",
+    "Showing interest in being part of HSG": r"(?:\d+\.\s*)?\*?Showing interest in being part of HSG\s*\*?\s*:\s*\*?\s*(.*)",
+    "Consent for sharing testimony on social media": r"(?:\d+\.\s*)?\*?Consent for sharing testimony on social media\s*\*?\s*:\s*\*?\s*(.*)",
+    "Action Required": r"(?:\d+\.\s*)?\*?Action Required\s*\*?\s*:\s*\*?\s*(.*)",
+    "Comments": r"(?:\d+\.\s*)?\*?Comments\s*\*?\s*:\s*\*?\s*(.*)",
 }
 
 
@@ -181,6 +203,9 @@ def is_midweek_no_update(value: str) -> bool:
     """
     return normalize_midweek_option(value) == "No update"
 
+# Column order matches the follow-up WhatsApp template, followed by
+# metadata columns (Date/Time/Volunteer/Newcomer ID) at the front and
+# midweek enrichment columns at the end.
 ALL_COLUMNS = [
     "Date",
     "Time",
@@ -192,9 +217,11 @@ ALL_COLUMNS = [
     "Planted in another church",
     "Service Attended",
     "Came for Healing",
+    "Healing Progress",
     "New Believer",
     "Showing desire to grow in the Lord",
     "Showing interest in being part of HSG",
+    "Consent for sharing testimony on social media",
     "Action Required",
     "Comments",
 ] + MIDWEEK_COLUMNS
@@ -216,7 +243,11 @@ def load_messages(path: str):
         for raw_line in f:
             line = normalize_unicode_spaces(raw_line.rstrip("\n"))
 
-            if WHATSAPP_REGEX_V2.match(line) or WHATSAPP_REGEX_V1.match(line):
+            if (
+                WHATSAPP_REGEX_V2.match(line)
+                or WHATSAPP_REGEX_V3.match(line)
+                or WHATSAPP_REGEX_V1.match(line)
+            ):
                 if buffer:
                     messages.append(buffer)
                 buffer = line
@@ -247,6 +278,14 @@ def parse_header(message: str):
     header_line = normalize_unicode_spaces(lines[0])
     rest = "\n".join(lines[1:])
 
+    def _normalize_slash_date(date_str: str) -> str:
+        for fmt in ("%d/%m/%Y", "%d/%m/%y"):
+            try:
+                return datetime.strptime(date_str, fmt).strftime("%d/%m/%Y")
+            except ValueError:
+                continue
+        raise ValueError(f"Unsupported WhatsApp date: {date_str}")
+
     # New format
     m2 = WHATSAPP_REGEX_V2.match(header_line)
     if m2:
@@ -255,14 +294,48 @@ def parse_header(message: str):
         date_norm = datetime.strptime(date_str, "%Y-%m-%d").strftime("%d/%m/%Y")
         return date_norm, time_str.strip(), sender.strip(), body.strip()
 
+    # Bracketed slash-date format
+    m3 = WHATSAPP_REGEX_V3.match(header_line)
+    if m3:
+        date_str, time_str, sender, first_msg = m3.groups()
+        body = first_msg + ("\n" + rest if rest else "")
+        date_norm = _normalize_slash_date(date_str)
+        return date_norm, time_str.strip(), sender.strip(), body.strip()
+
     # Old format
     m1 = WHATSAPP_REGEX_V1.match(header_line)
     if m1:
         date_str, time_str, sender, first_msg = m1.groups()
         body = first_msg + ("\n" + rest if rest else "")
-        return date_str, time_str.strip(), sender.strip(), body.strip()
+        date_norm = _normalize_slash_date(date_str)
+        return date_norm, time_str.strip(), sender.strip(), body.strip()
 
     return None
+
+
+def parse_message_datetime(date_str: str, time_str: str) -> datetime:
+    """
+    Parse a normalized WhatsApp date + time into a datetime.
+
+    Supports both:
+      - 12-hour exports like "09:50:53 AM"
+      - 24-hour exports like "19:06:25"
+    """
+    normalized_time = normalize_unicode_spaces(time_str)
+    candidates = [
+        "%d/%m/%Y %I:%M:%S %p",
+        "%d/%m/%Y %I:%M %p",
+        "%d/%m/%Y %H:%M:%S",
+        "%d/%m/%Y %H:%M",
+    ]
+
+    for fmt in candidates:
+        try:
+            return datetime.strptime(f"{date_str} {normalized_time}", fmt)
+        except ValueError:
+            continue
+
+    raise ValueError(f"Unsupported WhatsApp timestamp: {date_str} {normalized_time}")
 
 
 # =====================================================================
@@ -270,7 +343,7 @@ def parse_header(message: str):
 # =====================================================================
 
 BLOCK_START_REGEX = re.compile(
-    r"^\s*(?:\d+\.\s*)?\*?Newcomer Name\*?\s*:",
+    r"^\s*(?:\d+\.\s*)?\*?Newcomer Name\s*\*?\s*:",
     re.IGNORECASE,
 )
 
@@ -447,11 +520,8 @@ def parse_whatsapp_file(path: str, start_date, end_date):
         date_str, time_str, sender, body = parsed
         time_str = normalize_unicode_spaces(time_str)
 
-        # Build datetime for date range filtering
-        try:
-            dt = datetime.strptime(f"{date_str} {time_str}", "%d/%m/%Y %I:%M:%S %p")
-        except ValueError:
-            dt = datetime.strptime(f"{date_str} {time_str}", "%d/%m/%Y %I:%M %p")
+        # Build datetime for date range filtering.
+        dt = parse_message_datetime(date_str, time_str)
 
         if not (start_date <= dt.date() <= end_date):
             continue
@@ -499,10 +569,7 @@ def parse_midweek_updates_from_whatsapp_file(
         time_str = normalize_unicode_spaces(time_str)
 
         # Build datetime for date range filtering (same as parse_whatsapp_file).
-        try:
-            dt = datetime.strptime(f"{date_str} {time_str}", "%d/%m/%Y %I:%M:%S %p")
-        except ValueError:
-            dt = datetime.strptime(f"{date_str} {time_str}", "%d/%m/%Y %I:%M %p")
+        dt = parse_message_datetime(date_str, time_str)
 
         if not (start_date <= dt.date() <= end_date):
             continue
@@ -587,10 +654,14 @@ def ensure_newcomers_sheet_schema(sheet_path: str) -> None:
     """
     Ensure the newcomers CSV header matches ALL_COLUMNS.
 
-    If the file already exists with an older header (e.g., before midweek
-    columns were added), rewrite it with the new header and map existing
-    rows into the extended schema so downstream code sees a consistent
-    data model.
+    If the file already exists with an older header (e.g., before new
+    follow-up or midweek columns were added), rewrite it with the new
+    header and map existing rows into the extended schema so downstream
+    code sees a consistent data model.
+
+    Newly introduced columns are created empty. Existing cell values are
+    preserved for columns that already exist; nothing is backfilled or
+    inferred for the new fields.
     """
     if not os.path.exists(sheet_path):
         return
@@ -616,6 +687,7 @@ def ensure_newcomers_sheet_schema(sheet_path: str) -> None:
 
     normalized_rows = []
     for row in existing_rows:
+        # Preserve known values; leave any newly added columns blank.
         normalized = {col: (row.get(col) or "") for col in ALL_COLUMNS}
         normalized_rows.append(normalized)
 
@@ -624,6 +696,22 @@ def ensure_newcomers_sheet_schema(sheet_path: str) -> None:
         writer.writeheader()
         for r in normalized_rows:
             writer.writerow(r)
+
+
+def ensure_file_ends_with_newline(path: str) -> None:
+    """
+    If a text file exists and is non-empty, make sure it ends with a newline
+    before any append operation so the first appended CSV row does not get
+    merged into the last existing row.
+    """
+    if not os.path.exists(path) or os.path.getsize(path) == 0:
+        return
+
+    with open(path, "rb+") as f:
+        f.seek(-1, os.SEEK_END)
+        last_byte = f.read(1)
+        if last_byte != b"\n":
+            f.write(b"\n")
 
 
 def append_newcomers_sheet(records, sheet_path: str):
@@ -639,6 +727,8 @@ def append_newcomers_sheet(records, sheet_path: str):
     ensure_newcomers_sheet_schema(sheet_path)
 
     file_exists = os.path.exists(sheet_path)
+    if file_exists:
+        ensure_file_ends_with_newline(sheet_path)
 
     with open(sheet_path, "a", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=ALL_COLUMNS)

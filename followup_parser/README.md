@@ -55,9 +55,11 @@ But it **depends on the exact field labels** (spelling & spacing) below:
 - `Planted in another church`
 - `Service Attended`
 - `Came for Healing`
+- `Healing Progress`
 - `New Believer`
 - `Showing desire to grow in the Lord`
 - `Showing interest in being part of HSG`
+- `Consent for sharing testimony on social media`
 - `Action Required`
 - `Comments`
 
@@ -105,9 +107,12 @@ For each message in the WhatsApp export:
 2. **Filters by date** so only messages within `start-date` to `end-date` are considered.
 3. **Finds one or more newcomer update blocks** in the message body, each starting with `Newcomer Name`.
 4. For each block, it:
-   - Extracts values for each template field.
+   - Extracts values for each template field (including `Healing Progress` and `Consent for sharing testimony on social media`).
    - Cleans formatting (bold markers, underscores, edited markers).
 5. **Writes all extracted updates to CSV**, with one row per newcomer.
+6. **Assigns `Newcomer ID`s** and appends those rows into `hsg_newcomers_2026.csv`.
+7. **Upgrades the newcomers sheet schema** if needed: any missing template columns are created in the correct order and left blank for existing rows (no backfill).
+8. **Also scans for midweek templates** in the same export and applies matching updates (see Midweek section below).
 
 At the end it prints:
 
@@ -134,28 +139,41 @@ If counts are off, re-check:
 
 ## WhatsApp template format
 
-Below is the **recommended template** to be used in the Followup Team group.  
-The numbering and bolding help readability, but the parser only requires that the **field names and colons match exactly**.
+Below is the **recommended follow-up template** to be used in the Followup Team group.  
+The numbering and bolding help readability, but the parser only requires that the **field names and colons match**.
 
 ```text
-1. *Newcomer Name*: <name>
-2. *Area*: <area>
-3. *Outstation*: <outstation / N.A.>
-4. *Planted in another church*: <Yes/No/Unknown>
-5. *Service Attended*: <service details>
-6. *Came for Healing*: <Yes/No/Details>
-7. *New Believer*: <Yes/No/Unknown>
-8. *Showing desire to grow in the Lord*: <Yes/No/Details>
-9. *Showing interest in being part of HSG*: <Yes/No/Details>
-10. *Action Required*: <what needs to be done>
-11. *Comments*: <any other notes>
+*Newcomer Name* :
+*Area* : (General locality only, full address not required)
+*Outstation* : Yes / No
+*Planted in another church* : Yes / No
+*Service Attended* : (All Night Prayer / St. Joseph Service / Sunday Service, etc.)
+*Came for Healing* : Yes / No
+*Healing Progress* : (If yes, mention current status / improvement / no change)
+*New Believer* : Yes / No
+*Showing desire to grow in the Lord* : Yes / No
+*Showing interest in being part of HSG* : Yes / No
+*Consent for sharing testimony on social media* : Yes / No
+*Action Required* : (Need Bible / Prayer Support / Follow-up Visit / Other)
+*Comments* : (Any other important details)
 ```
 
 Key points:
 
 - Keep the **field names exactly as shown** (including capitalization and spaces).
-- Ensure each field line has a **colon `:`** right after the field name.
+- Ensure each field line has a **colon `:`** after the field name (inside or outside the bold markers is fine).
+- Optional numbering (`1.`, `2.`, …) before a field name is also accepted.
 - If you don’t know a value, still include the field line and put something like `N.A.` or `Unknown`.
+
+### Output / sheet columns
+
+Regular follow-up rows (in `followup_output.csv` and `hsg_newcomers_2026.csv`) use this column order:
+
+1. `Date`, `Time`, `Volunteer Name`, `Newcomer ID`
+2. Template fields in the same order as above (`Newcomer Name` … `Comments`)
+3. Midweek enrichment columns at the end (`Interested in Powerhouse`, `Powerhouse Available`, `Connected to Powerhouse`, `Midweek Update Notes`)
+
+If `hsg_newcomers_2026.csv` is missing any of these columns (for example after a template change), the script **creates the missing columns** on the next run and leaves them **blank for existing rows**. It does **not** backfill historical values.
 
 Using this template consistently will make the CSV clean and reliable.
 
